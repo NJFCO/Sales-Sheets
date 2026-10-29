@@ -156,6 +156,18 @@
   .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--ink); color: #fff;
            padding: 10px 18px; border-radius: 8px; font-weight: 600; opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 20; }
   .toast.on { opacity: 1; }
+  .attach { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); max-width: 560px; width: calc(100% - 32px);
+            background: var(--soil); color: #fff; padding: 12px 40px 12px 16px; border-radius: 10px; font-size: 13.5px; line-height: 1.45;
+            box-shadow: 0 8px 28px rgba(0,0,0,.25); display: none; z-index: 30; }
+  .attach.on { display: block; }
+  .attach button { position: absolute; top: 6px; right: 8px; background: none; border: 0; color: #fff; font-size: 20px; cursor: pointer; }
+  dialog#pkgDlg { border: 0; border-radius: 12px; padding: 22px 24px 20px; width: min(380px, calc(100% - 32px)); box-shadow: 0 16px 48px rgba(0,0,0,.3); }
+  dialog#pkgDlg::backdrop { background: rgba(54,50,46,.45); }
+  dialog#pkgDlg h3 { margin: 0 0 6px; color: var(--soil); }
+  dialog#pkgDlg p { margin: 0 0 16px; color: var(--ink); }
+  .dlg-acts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .dlg-acts .btn.primary { grid-column: auto; }
+  .dlg-x { position: absolute; top: 8px; right: 10px; background: none; border: 0; font-size: 22px; color: var(--bronze); cursor: pointer; }
   .pilot { flex: none; background: var(--cream); color: var(--soil); font-size: 12px; padding: 6px 24px; border-bottom: 1px solid var(--rule); }
 
   @media (max-width: 1100px) { .detail { grid-template-columns: 1fr; } .steps { grid-template-columns: 1fr 1fr; } }
@@ -246,6 +258,20 @@
   </section>
 </main>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
+<div class="attach" id="attachHint" role="status" aria-live="polite">
+  <b>PDF downloaded.</b> Attach <span id="attachName"></span> from your Downloads folder to the email that just opened
+  (drag it from the download bar into the message).
+  <button onclick="this.parentNode.classList.remove('on')" aria-label="Close">×</button>
+</div>
+<dialog id="pkgDlg">
+  <h3>Package ready</h3>
+  <p id="pkgCount"></p>
+  <div class="dlg-acts">
+    <button class="btn" id="pkgDl">Download PDF</button>
+    <button class="btn primary" id="pkgMail">Email PDF</button>
+  </div>
+  <button class="dlg-x" onclick="this.closest('dialog').close()" aria-label="Close">×</button>
+</dialog>
 
 <script src="data.js"></script>
 <script src="lib/pdf-lib.min.js"></script>
@@ -265,6 +291,42 @@
   const toast = msg => { const t = $("#toast"); t.textContent = msg; t.classList.add("on"); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove("on"), 2200); };
   const fmtDate = s => s ? new Date(s + "T12:00:00").toLocaleDateString("en-US", {month: "short", day: "numeric", year: "numeric"}) : "—";
   const absUrl = rel => new URL(rel, location.href).href;
+
+  // ---------- email with the PDF attached ----------
+  // Browsers can't attach files to a mailto: draft, so: (1) share the PDF file itself through the
+  // system share sheet (Outlook / Mail / Teams on Windows, Mail on phones); (2) otherwise download
+  // the PDF and open a pre-filled draft so it can be attached in one drag.
+  const blobCache = new Map();
+  const getBlob = url => {
+    if (!blobCache.has(url)) blobCache.set(url, fetch(url).then(r => { if (!r.ok) throw new Error(r.status); return r.blob(); }).catch(e => { blobCache.delete(url); throw e; }));
+    return blobCache.get(url);
+  };
+  const canShareFiles = () => { try { return !!(navigator.canShare && navigator.canShare({ files: [new File(["x"], "x.pdf", { type: "application/pdf" })] })); } catch { return false; } };
+  function downloadBlob(blob, name) {
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name;
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+  }
+  async function emailPdf({ url, blob, filename, subject, text }) {
+    try {
+      if (!blob) blob = await getBlob(url);
+      const file = new File([blob], filename, { type: "application/pdf" });
+      if (canShareFiles() && navigator.canShare({ files: [file] })) {
+        try { await navigator.share({ files: [file], title: subject, text }); return; }
+        catch (e) { if (e && e.name === "AbortError") return; /* else fall through */ }
+      }
+      downloadBlob(blob, filename);
+      const body = `${text}\n\n[Attach ${filename} from your Downloads folder]\n` + (url ? `\nOnline copy: ${absUrl(url)}\n` : "");
+      setTimeout(() => { location.href = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`; }, 400);
+      showAttachHint(filename);
+    } catch (e) {
+      console.error(e);
+      if (url) location.href = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(text + "\n" + absUrl(url))}`;
+    }
+  }
+  function showAttachHint(filename) {
+    const d = $("#attachHint"); $("#attachName").textContent = filename;
+    d.classList.add("on"); clearTimeout(d._h); d._h = setTimeout(() => d.classList.remove("on"), 9000);
+  }
 
   $("#pilotNote").textContent = BROKER
     ? `Pilot · ${META.count} Neil Jones Food Company products · updated ${META.built.slice(0, 10)}`
@@ -388,10 +450,12 @@
       </div>`;
     $("#back").onclick = () => $("#v-sheets").classList.remove("detail-open");
     $("#aPrint").onclick = () => printPdf(p);
-    $("#aEmail").onclick = () => {
-      const body = `Hi,\n\nHere is the current spec sheet for ${p.brand} ${p.name} (${p.pack}), item ${p.item}:\n${absUrl(p.pdf)}\n\nRevision ${fmtDate(p.rev)}.\n`;
-      location.href = `mailto:?subject=${encodeURIComponent(`Spec sheet: ${p.brand} ${p.name} (${p.item})`)}&body=${encodeURIComponent(body)}`;
-    };
+    getBlob(p.pdf).catch(() => {});   // prefetch so sharing is instant
+    $("#aEmail").onclick = () => emailPdf({
+      url: p.pdf, filename: p.pdf.split("/").pop(),
+      subject: `Spec sheet: ${p.brand} ${p.name} (${p.item})`,
+      text: `Hi,\n\nAttached is the current spec sheet for ${p.brand} ${p.name} (${p.pack}), item ${p.item}, revision ${fmtDate(p.rev)}.`
+    });
     $("#aCopy").onclick = async () => { try { await navigator.clipboard.writeText(absUrl(p.pdf)); toast("Link copied"); } catch { prompt("Copy this link:", absUrl(p.pdf)); } };
     $("#aAdd").onclick = e => { state.sel.has(p.gtin) ? state.sel.delete(p.gtin) : state.sel.add(p.gtin);
       e.target.textContent = state.sel.has(p.gtin) ? "In package ✓" : "Add to package"; renderSel(); renderListChecks(); };
@@ -426,10 +490,13 @@
       }
       out.setTitle(`NJFCO spec sheets (${items.length})`); out.setAuthor("Neil Jones Food Company");
       const blob = new Blob([await out.save()], {type: "application/pdf"});
-      const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
-      a.download = `NJFCO_Spec_Sheets_${new Date().toISOString().slice(0, 10)}_${items.length}.pdf`;
-      document.body.appendChild(a); a.click(); a.remove();
-      toast(`Package of ${items.length} sheets downloaded`);
+      const name = `NJFCO_Spec_Sheets_${new Date().toISOString().slice(0, 10)}_${items.length}.pdf`;
+      $("#pkgCount").textContent = `${items.length} spec sheets combined into one PDF.`;
+      $("#pkgDl").onclick = () => { downloadBlob(blob, name); $("#pkgDlg").close(); toast("Package downloaded"); };
+      $("#pkgMail").onclick = () => { $("#pkgDlg").close(); emailPdf({ blob, filename: name,
+        subject: `Neil Jones Food Company spec sheets (${items.length})`,
+        text: `Hi,\n\nAttached are the current spec sheets for:\n` + items.map(p => `- ${p.brand} ${p.name} (${p.pack}), item ${p.item}`).join("\n") }); };
+      $("#pkgDlg").showModal();
     } catch (e) {
       console.error(e); toast("Couldn't build the package here. Open the portal from its web address and try again.");
     } finally { btn.disabled = false; btn.textContent = "Build package PDF"; }
@@ -460,9 +527,12 @@
           </div>
         </div>
       </div>`).join("") || `<p class="lead">No sales materials match.</p>`;
-    $("#mgrid").querySelectorAll("[data-mail]").forEach(b => b.onclick = () => {
+    $("#mgrid").querySelectorAll("[data-mail]").forEach(b => {
       const m = M.find(x => x.id === b.dataset.mail);
-      location.href = `mailto:?subject=${encodeURIComponent(`Neil Jones Food Company: ${m.title}`)}&body=${encodeURIComponent(`Hi,\n\nHere is our ${m.title} ${m.type.toLowerCase()}:\n${absUrl(m.pdf)}\n`)}`;
+      b.onmouseenter = () => getBlob(m.pdf).catch(() => {});
+      b.onclick = () => emailPdf({ url: m.pdf, filename: m.pdf.split("/").pop(),
+        subject: `Neil Jones Food Company: ${m.title}`,
+        text: `Hi,\n\nAttached is our ${m.title} ${m.type.toLowerCase()}.` });
     });
     $("#mgrid").querySelectorAll("[data-copy]").forEach(b => b.onclick = async () => {
       const m = M.find(x => x.id === b.dataset.copy);
