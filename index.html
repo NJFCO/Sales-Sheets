@@ -123,6 +123,32 @@
   .pathin { margin-top: 8px; display: flex; gap: 6px; }
   .pathin input { flex: 1; padding: 6px 9px; border: 1px solid var(--rule); border-radius: 6px; font-size: 12.5px; background: var(--warm); }
 
+  #v-materials { grid-template-columns: 1fr; overflow-y: auto; }
+  .mgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 16px; }
+  .mcard { background: #fff; border-radius: 10px; overflow: hidden; display: flex; flex-direction: column;
+           box-shadow: 0 1px 2px rgba(0,0,0,.06); }
+  .mcard .thumb { aspect-ratio: 17 / 22; background: var(--warm); overflow: hidden; border-bottom: 1px solid var(--rule); }
+  .mcard .thumb img { width: 100%; display: block; }
+  .mcard .body { padding: 12px 14px 14px; display: flex; flex-direction: column; gap: 4px; flex: 1; }
+  .mcard .type { font-size: 11px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; color: var(--red); }
+  .mcard .t { font-weight: 700; color: var(--soil); font-size: 15px; line-height: 1.25; }
+  .mcard .m { font-size: 12px; color: var(--bronze); }
+  .mcard .acts { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: auto; padding-top: 10px; }
+  .mcard .acts .btn { padding: 6px 8px; font-size: 12.5px; }
+  .mcard .acts .wide { grid-column: 1 / -1; }
+  .matsearch { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 16px; }
+  .matsearch input { flex: 1; min-width: 220px; padding: 10px 14px; border: 1.5px solid var(--rule); border-radius: 8px; background: #fff; font-size: 15px; }
+  .related { margin-top: 18px; }
+  .related h3 { font-size: 11.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--soil); margin: 0 0 8px; }
+  .rel { display: grid; grid-template-columns: 44px 1fr; gap: 10px; align-items: center; padding: 7px 0; border-top: 1px solid var(--rule);
+         text-decoration: none; }
+  .rel img { width: 44px; border: 1px solid var(--rule); border-radius: 3px; display: block; background: #fff; }
+  .rel b { color: var(--soil); font-size: 13px; display: block; } .rel span { font-size: 11.5px; color: var(--bronze); }
+  .matrow { display: block; width: 100%; text-align: left; padding: 10px 16px; background: var(--cream); border: 0; border-bottom: 1px solid var(--rule);
+            cursor: pointer; font-weight: 600; color: var(--soil); font-size: 13px; }
+  .scope { display: none; margin-top: 10px; align-items: center; gap: 8px; font-size: 12.5px; color: var(--soil); font-weight: 600; }
+  .scope.on { display: flex; }
+  .scope button { border: 0; background: var(--soil); color: #fff; border-radius: 12px; padding: 2px 9px; cursor: pointer; font-size: 12px; }
   table.exc { width: 100%; border-collapse: collapse; background: #fff; border-radius: 10px; overflow: hidden; font-size: 13px; }
   table.exc th { text-align: left; background: var(--soil); color: #fff; padding: 9px 12px; font-weight: 600; }
   table.exc td { padding: 9px 12px; border-top: 1px solid var(--rule); vertical-align: top; }
@@ -154,8 +180,9 @@
   <div class="title">Product Spec Sheets<small>Foodservice · Pilot</small></div>
   <nav class="tabs" role="tablist">
     <button role="tab" data-view="sheets" aria-selected="true">Spec sheets</button>
-    <button role="tab" data-view="images" aria-selected="false">Images<span class="badge" id="imgBadge"></span></button>
-    <button role="tab" data-view="exceptions" aria-selected="false">Exceptions<span class="badge" id="excBadge"></span></button>
+    <button role="tab" data-view="materials" aria-selected="false">Sales materials</button>
+    <button role="tab" data-view="images" aria-selected="false" data-internal>Images<span class="badge" id="imgBadge"></span></button>
+    <button role="tab" data-view="exceptions" aria-selected="false" data-internal>Exceptions<span class="badge" id="excBadge"></span></button>
   </nav>
 </header>
 <div class="pilot" id="pilotNote"></div>
@@ -168,8 +195,10 @@
         <input type="search" id="q" placeholder="Search item #, base #, GTIN or product name" autocomplete="off" aria-label="Search products">
         <div class="filters" id="brandFilters"></div>
         <div class="filters" id="catFilters"></div>
+        <div class="scope" id="scope"><span id="scopeLabel"></span><button id="scopeClear">Show all products ×</button></div>
       </div>
       <div class="count"><span id="count"></span><button id="clearFilters" hidden>Clear filters</button></div>
+      <div id="matHint"></div>
       <ul class="results" id="results"></ul>
       <div class="selbar" id="selbar">
         <span class="grow" id="selcount"></span>
@@ -178,6 +207,16 @@
       </div>
     </div>
     <div class="right" id="right"></div>
+  </section>
+
+  <!-- ================= Sales materials ================= -->
+  <section class="view" id="v-materials">
+    <div class="page">
+      <h1>Sales materials</h1>
+      <p class="lead">POS flyers and broker materials. Each piece is linked to the products it features, so it also appears on those products' spec sheet pages.</p>
+      <div class="matsearch"><input type="search" id="mq" placeholder="Search flyers and guides" aria-label="Search sales materials"><div class="filters" id="mtypes" style="margin:0"></div></div>
+      <div class="mgrid" id="mgrid"></div>
+    </div>
   </section>
 
   <!-- ================= Images ================= -->
@@ -212,7 +251,11 @@
 <script src="lib/pdf-lib.min.js"></script>
 <script>
 (() => {
-  const P = window.PORTAL.products, META = window.PORTAL.meta;
+  const P = window.PORTAL.products, META = window.PORTAL.meta, M = window.PORTAL.materials || [];
+  const BROKER = META.audience === "broker";
+  if (BROKER) document.querySelectorAll("[data-internal]").forEach(b => b.remove());
+  if (!M.length) document.querySelector('[data-view="materials"]').remove();
+  const matsFor = g => M.filter(m => m.gtins.includes(g));
   const $ = s => document.querySelector(s);
   const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
   const store = {
@@ -223,7 +266,9 @@
   const fmtDate = s => s ? new Date(s + "T12:00:00").toLocaleDateString("en-US", {month: "short", day: "numeric", year: "numeric"}) : "—";
   const absUrl = rel => new URL(rel, location.href).href;
 
-  $("#pilotNote").textContent = `Pilot build ${META.built} · ${META.count} own-brand products from 1WorldSync · draft data, not for customer distribution until approved`;
+  $("#pilotNote").textContent = BROKER
+    ? `Pilot · ${META.count} Neil Jones Food Company products · updated ${META.built.slice(0, 10)}`
+    : `Pilot build ${META.built} · ${META.count} own-brand products from 1WorldSync · draft data, not for customer distribution until approved`;
 
   // ---------------- tabs ----------------
   function showView(v) {
@@ -233,7 +278,7 @@
   document.querySelectorAll("nav.tabs button").forEach(b => b.onclick = () => showView(b.dataset.view));
 
   // ---------------- search ----------------
-  const state = { q: "", brands: new Set(), cats: new Set(), active: null, sel: new Set() };
+  const state = { q: "", brands: new Set(), cats: new Set(), active: null, sel: new Set(), only: null };
   const brands = [...new Map(P.map(p => [p.brand, p.color])).entries()];
   const cats = [...new Set(P.map(p => p.category))].sort();
   P.forEach(p => {
@@ -267,7 +312,7 @@
 
   function filtered() {
     return P.map(p => [p, score(p, state.q.trim())])
-      .filter(([p, s]) => s > 0 && (!state.brands.size || state.brands.has(p.brand)) && (!state.cats.size || state.cats.has(p.category)))
+      .filter(([p, s]) => s > 0 && (!state.only || state.only.gtins.includes(p.gtin)) && (!state.brands.size || state.brands.has(p.brand)) && (!state.cats.size || state.cats.has(p.category)))
       .sort((a, b) => b[1] - a[1] || a[0].brand.localeCompare(b[0].brand) || a[0].name.localeCompare(b[0].name))
       .map(([p]) => p);
   }
@@ -275,7 +320,13 @@
   function renderList() {
     const list = filtered();
     $("#count").textContent = `${list.length} of ${P.length} products`;
-    $("#clearFilters").hidden = !(state.brands.size || state.cats.size || state.q);
+    $("#clearFilters").hidden = !(state.brands.size || state.cats.size || state.q || state.only);
+    $("#scope").classList.toggle("on", !!state.only);
+    if (state.only) $("#scopeLabel").textContent = `Products in: ${state.only.title}`;
+    const ql = state.q.trim().toLowerCase();
+    const mh = ql.length > 2 ? M.filter(m => (m.title + " " + m.type).toLowerCase().includes(ql)) : [];
+    $("#matHint").innerHTML = mh.length ? `<button class="matrow" id="matHintBtn">${mh.length} sales material${mh.length > 1 ? "s" : ""} match “${esc(state.q.trim())}” →</button>` : "";
+    if (mh.length) $("#matHintBtn").onclick = () => { $("#mq").value = state.q.trim(); renderMaterials(); showView("materials"); };
     $("#results").innerHTML = list.length ? list.map(p => `
       <li data-g="${p.gtin}" class="${state.active === p.gtin ? "active" : ""}">
         <input type="checkbox" aria-label="Add ${esc(p.name)} to package" ${state.sel.has(p.gtin) ? "checked" : ""}>
@@ -292,7 +343,8 @@
   let qTimer;
   $("#q").addEventListener("input", e => { clearTimeout(qTimer); qTimer = setTimeout(() => { state.q = e.target.value; renderList(); }, 120); });
   $("#q").addEventListener("keydown", e => { if (e.key === "Enter") { const f = filtered()[0]; if (f) openDetail(f.gtin); } });
-  $("#clearFilters").onclick = () => { state.brands.clear(); state.cats.clear(); state.q = ""; $("#q").value = "";
+  $("#scopeClear").onclick = () => { state.only = null; renderList(); };
+  $("#clearFilters").onclick = () => { state.only = null; state.brands.clear(); state.cats.clear(); state.q = ""; $("#q").value = "";
     document.querySelectorAll(".filters .chip").forEach(c => c.setAttribute("aria-pressed", false)); renderList(); };
 
   // ---------------- detail ----------------
@@ -328,7 +380,10 @@
           </dl>
           <div class="tagrow">${p.chips.map(c => `<span class="tag">${esc(c)}</span>`).join("")}</div>
           <div class="rev">Revision <b>${fmtDate(p.rev)}</b> · Doc ${p.doc}<br>Source: 1WorldSync GDSN</div>
-          ${img === "missing" || img === "review" ? `<div class="imgwarn">Product image ${img === "missing" ? "not yet assigned" : "awaiting review"} · <a href="#" id="toImg">fix in Images</a></div>` : ""}
+          ${matsFor(p.gtin).length ? `<div class="related"><h3>Related sales materials</h3>${matsFor(p.gtin).map(m => `
+            <a class="rel" href="${m.pdf}" target="_blank" rel="noopener">${m.thumb ? `<img src="${m.thumb}" alt="">` : `<span></span>`}
+              <div><b>${esc(m.title)}</b><span>${esc(m.type)}${m.pages ? ` · ${m.pages} page${m.pages > 1 ? "s" : ""}` : ""}</span></div></a>`).join("")}</div>` : ""}
+          ${!BROKER && (img === "missing" || img === "review") ? `<div class="imgwarn">Product image ${img === "missing" ? "not yet assigned" : "awaiting review"} · <a href="#" id="toImg">fix in Images</a></div>` : ""}
         </div>
       </div>`;
     $("#back").onclick = () => $("#v-sheets").classList.remove("detail-open");
@@ -379,6 +434,49 @@
       console.error(e); toast("Couldn't build the package here. Open the portal from its web address and try again.");
     } finally { btn.disabled = false; btn.textContent = "Build package PDF"; }
   };
+
+  // ---------------- sales materials ----------------
+  const mTypes = new Set();
+  function renderMaterials() {
+    const types = [...new Set(M.map(m => m.type))].sort();
+    $("#mtypes").innerHTML = types.length > 1 ? types.map(t => `<button class="chip" aria-pressed="${mTypes.has(t)}" data-k="${esc(t)}">${esc(t)}</button>`).join("") : "";
+    $("#mtypes").querySelectorAll(".chip").forEach(b => b.onclick = () => { mTypes.has(b.dataset.k) ? mTypes.delete(b.dataset.k) : mTypes.add(b.dataset.k); renderMaterials(); });
+    const q = $("#mq").value.trim().toLowerCase();
+    const list = M.filter(m => (!mTypes.size || mTypes.has(m.type)) && (!q || (m.title + " " + m.type).toLowerCase().includes(q)
+      || m.gtins.some(g => { const p = P.find(x => x.gtin === g); return p && (p.name + " " + p.brand + " " + p.item).toLowerCase().includes(q); })));
+    $("#mgrid").innerHTML = list.map(m => `
+      <div class="mcard">
+        <div class="thumb">${m.thumb ? `<img loading="lazy" src="${m.thumb}" alt="First page of ${esc(m.title)}">` : ""}</div>
+        <div class="body">
+          <div class="type">${esc(m.type)}${!BROKER && m.audience === "internal" && m.type.toLowerCase() !== "internal" ? " · internal" : ""}</div>
+          <div class="t">${esc(m.title)}</div>
+          <div class="m">${m.pages ? `${m.pages} page${m.pages > 1 ? "s" : ""} · ` : ""}Updated ${fmtDate(m.updated)}</div>
+          <div class="m">Covers ${m.gtins.length} product${m.gtins.length === 1 ? "" : "s"}</div>
+          <div class="acts">
+            <a class="btn primary" href="${m.pdf}" download style="grid-column:auto">Download</a>
+            <button class="btn" data-mail="${m.id}">Email</button>
+            <button class="btn" data-copy="${m.id}">Copy link</button>
+            <button class="btn" data-prod="${m.id}" ${m.gtins.length ? "" : "disabled"}>Products</button>
+          </div>
+        </div>
+      </div>`).join("") || `<p class="lead">No sales materials match.</p>`;
+    $("#mgrid").querySelectorAll("[data-mail]").forEach(b => b.onclick = () => {
+      const m = M.find(x => x.id === b.dataset.mail);
+      location.href = `mailto:?subject=${encodeURIComponent(`Neil Jones Food Company: ${m.title}`)}&body=${encodeURIComponent(`Hi,\n\nHere is our ${m.title} ${m.type.toLowerCase()}:\n${absUrl(m.pdf)}\n`)}`;
+    });
+    $("#mgrid").querySelectorAll("[data-copy]").forEach(b => b.onclick = async () => {
+      const m = M.find(x => x.id === b.dataset.copy);
+      try { await navigator.clipboard.writeText(absUrl(m.pdf)); toast("Link copied"); } catch { prompt("Copy this link:", absUrl(m.pdf)); }
+    });
+    $("#mgrid").querySelectorAll("[data-prod]").forEach(b => b.onclick = () => {
+      const m = M.find(x => x.id === b.dataset.prod);
+      state.only = { title: m.title, gtins: m.gtins }; state.active = null;
+      state.q = ""; $("#q").value = ""; state.brands.clear(); state.cats.clear();
+      document.querySelectorAll("#brandFilters .chip, #catFilters .chip").forEach(c => c.setAttribute("aria-pressed", false));
+      showView("sheets"); renderList();
+    });
+  }
+  $("#mq").addEventListener("input", renderMaterials);
 
   // ---------------- images ----------------
   const picks = store.get("njfco-image-picks", {});
@@ -434,11 +532,11 @@
   }
 
   // ---------------- exceptions ----------------
-  $("#excBadge").textContent = META.exceptions.length || "";
+  if ($("#excBadge")) $("#excBadge").textContent = META.exceptions.length || "";
   $("#excBody").innerHTML = META.exceptions.map(e => `<tr><td>${e.gtin}</td><td>${esc(e.brand)}</td><td>${esc(e.name)}</td><td>${esc(e.why)}</td></tr>`).join("");
 
   // ---------------- boot ----------------
-  renderList(); renderImages();
+  renderList(); renderMaterials(); if (!BROKER) renderImages();
   const m = location.hash.match(/gtin=(\d+)/); if (m) openDetail(m[1]);
 })();
 </script>
