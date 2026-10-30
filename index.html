@@ -59,6 +59,8 @@
   .r-name { font-weight: 700; color: var(--soil); line-height: 1.3; }
   .r-sub { font-size: 12.5px; color: var(--bronze); margin-top: 2px; }
   .r-sub b { color: var(--ink); font-weight: 600; }
+  .mk { display: inline-block; background: var(--soil); color: #fff; font-size: 10px; font-weight: 700; letter-spacing: .08em;
+        text-transform: uppercase; padding: 1px 6px; border-radius: 3px; vertical-align: 1px; }
   .r-item { font-size: 12px; text-align: right; color: var(--bronze); white-space: nowrap; }
   .r-item b { display: block; color: var(--ink); font-size: 13px; }
   .empty-list { padding: 40px 20px; text-align: center; color: var(--bronze); }
@@ -206,8 +208,10 @@
     <div class="left">
       <div class="searchbox">
         <input type="search" id="q" placeholder="Search item #, base #, GTIN or product name" autocomplete="off" aria-label="Search products">
+        <div class="filters" id="chanFilters"></div>
         <div class="filters" id="brandFilters"></div>
         <div class="filters" id="catFilters"></div>
+        <div class="filters" id="mktFilters"></div>
         <div class="scope" id="scope"><span id="scopeLabel"></span><button id="scopeClear">Show all products ×</button></div>
       </div>
       <div class="count"><span id="count"></span><button id="clearFilters" hidden>Clear filters</button></div>
@@ -350,12 +354,12 @@
   document.querySelectorAll("nav.tabs button").forEach(b => b.onclick = () => showView(b.dataset.view));
 
   // ---------------- search ----------------
-  const state = { q: "", brands: new Set(), cats: new Set(), active: null, sel: new Set(), only: null };
+  const state = { q: "", chans: new Set(), brands: new Set(), cats: new Set(), mkts: new Set(), active: null, sel: new Set(), only: null };
   const brands = [...new Map(P.map(p => [p.brand, p.color])).entries()];
   const cats = [...new Set(P.map(p => p.category))].sort();
   P.forEach(p => {
     p._digits = [p.gtin, p.item.replace("-", ""), p.base].join(" ");
-    p._text = [p.name, p.short, p.brand, p.pack, p.category, p.organic ? "organic" : "", p.chips.join(" ")].join(" ").toLowerCase();
+    p._text = [p.name, p.short, p.brand, p.pack, p.category, p.channel || "", p.organic ? "organic" : "", p.market || "", p.chips.join(" ")].join(" ").toLowerCase();
   });
 
   function chipRow(el, items, set, withDot) {
@@ -366,8 +370,13 @@
       b.setAttribute("aria-pressed", set.has(b.dataset.k)); renderList();
     });
   }
+  const chans = [...new Set(P.map(p => p.channel || "Foodservice"))].sort();
+  if (chans.length > 1) chipRow($("#chanFilters"), chans.map(c => [c]), state.chans, false);
   chipRow($("#brandFilters"), brands, state.brands, true);
   chipRow($("#catFilters"), cats.map(c => [c]), state.cats, false);
+  const mkts = [...new Set(P.map(p => p.market || "US"))].sort((a, b) => (a === "US" ? -1 : b === "US" ? 1 : a.localeCompare(b)));
+  if (mkts.length > 1) chipRow($("#mktFilters"), mkts.map(m => [m === "US" ? "US labels" : `${m} labels`]), state.mkts, false);
+  const mktKey = p => (p.market || "US") === "US" ? "US labels" : `${p.market} labels`;
 
   function score(p, q) {
     if (!q) return 1;
@@ -384,7 +393,7 @@
 
   function filtered() {
     return P.map(p => [p, score(p, state.q.trim())])
-      .filter(([p, s]) => s > 0 && (!state.only || state.only.gtins.includes(p.gtin)) && (!state.brands.size || state.brands.has(p.brand)) && (!state.cats.size || state.cats.has(p.category)))
+      .filter(([p, s]) => s > 0 && (!state.only || state.only.gtins.includes(p.gtin)) && (!state.brands.size || state.brands.has(p.brand)) && (!state.cats.size || state.cats.has(p.category)) && (!state.chans.size || state.chans.has(p.channel || "Foodservice")) && (!state.mkts.size || state.mkts.has(mktKey(p))))
       .sort((a, b) => b[1] - a[1] || a[0].brand.localeCompare(b[0].brand) || a[0].name.localeCompare(b[0].name))
       .map(([p]) => p);
   }
@@ -392,7 +401,7 @@
   function renderList() {
     const list = filtered();
     $("#count").textContent = `${list.length} of ${P.length} products`;
-    $("#clearFilters").hidden = !(state.brands.size || state.cats.size || state.q || state.only);
+    $("#clearFilters").hidden = !(state.brands.size || state.cats.size || state.mkts.size || state.chans.size || state.q || state.only);
     $("#scope").classList.toggle("on", !!state.only);
     if (state.only) $("#scopeLabel").textContent = `Products in: ${state.only.title}`;
     const ql = state.q.trim().toLowerCase();
@@ -403,7 +412,7 @@
       <li data-g="${p.gtin}" class="${state.active === p.gtin ? "active" : ""}">
         <input type="checkbox" aria-label="Add ${esc(p.name)} to package" ${state.sel.has(p.gtin) ? "checked" : ""}>
         <div><div class="r-name">${esc(p.name)}</div>
-          <div class="r-sub"><b style="color:${p.color}">${esc(p.brand)}</b> · ${esc(p.pack)}</div></div>
+          <div class="r-sub"><b style="color:${p.color}">${esc(p.brand)}</b>${p.market && p.market !== "US" ? ` <span class="mk">${esc(p.market)}</span>` : ""} · ${esc(p.pack)}</div></div>
         <div class="r-item"><b>${p.item}</b>Rev ${fmtDate(p.rev)}</div>
       </li>`).join("") : `<div class="empty-list">No products match. Try an item number, base number or a product word like "marinara".</div>`;
     $("#results").querySelectorAll("li").forEach(li => {
@@ -416,7 +425,7 @@
   $("#q").addEventListener("input", e => { clearTimeout(qTimer); qTimer = setTimeout(() => { state.q = e.target.value; renderList(); }, 120); });
   $("#q").addEventListener("keydown", e => { if (e.key === "Enter") { const f = filtered()[0]; if (f) openDetail(f.gtin); } });
   $("#scopeClear").onclick = () => { state.only = null; renderList(); };
-  $("#clearFilters").onclick = () => { state.only = null; state.brands.clear(); state.cats.clear(); state.q = ""; $("#q").value = "";
+  $("#clearFilters").onclick = () => { state.only = null; state.brands.clear(); state.cats.clear(); state.mkts.clear(); state.chans.clear(); state.q = ""; $("#q").value = "";
     document.querySelectorAll(".filters .chip").forEach(c => c.setAttribute("aria-pressed", false)); renderList(); };
 
   // ---------------- detail ----------------
@@ -432,7 +441,7 @@
       <div class="detail">
         <div class="sheet"><img src="${p.preview}" alt="Spec sheet preview for ${esc(p.name)}"></div>
         <div class="facts">
-          <div class="eyebrow" style="color:${p.color}">${esc(p.brand)}</div>
+          <div class="eyebrow" style="color:${p.color}">${esc(p.brand)}${p.market && p.market !== "US" ? ` <span class="mk">${esc(p.market)}</span>` : ""}</div>
           <h2>${esc(p.name)}</h2>
           <div class="pack">${esc(p.pack)}</div>
           <div class="actions">
@@ -560,8 +569,8 @@
     $("#mgrid").querySelectorAll("[data-prod]").forEach(b => b.onclick = () => {
       const m = M.find(x => x.id === b.dataset.prod);
       state.only = { title: m.title, gtins: m.gtins }; state.active = null;
-      state.q = ""; $("#q").value = ""; state.brands.clear(); state.cats.clear();
-      document.querySelectorAll("#brandFilters .chip, #catFilters .chip").forEach(c => c.setAttribute("aria-pressed", false));
+      state.q = ""; $("#q").value = ""; state.brands.clear(); state.cats.clear(); state.chans.clear(); state.mkts.clear();
+      document.querySelectorAll(".filters .chip").forEach(c => c.setAttribute("aria-pressed", false));
       showView("sheets"); renderList();
     });
   }
