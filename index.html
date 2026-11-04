@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
-<title>NJFCO Product Spec Sheets — Pilot</title>
+<title>NJFCO Product Sales Sheets</title>
 <style>
   @font-face { font-family: "Open Sans"; font-weight: 400; src: url("assets/open-sans-latin-400-normal.woff2"); }
   @font-face { font-family: "Open Sans"; font-weight: 600; src: url("assets/open-sans-latin-600-normal.woff2"); }
@@ -192,9 +192,9 @@
 <body>
 <header class="top">
   <img src="assets/njfco-logo-white.png" alt="Neil Jones Food Company">
-  <div class="title">Product Spec Sheets<small>Foodservice · Pilot</small></div>
+  <div class="title">Product Sales Sheets<small>Foodservice / Industrial</small></div>
   <nav class="tabs" role="tablist">
-    <button role="tab" data-view="sheets" aria-selected="true">Spec sheets</button>
+    <button role="tab" data-view="sheets" aria-selected="true">Sales sheets</button>
     <button role="tab" data-view="materials" aria-selected="false">Sales materials</button>
     <button role="tab" data-view="images" aria-selected="false" data-internal>Images<span class="badge" id="imgBadge"></span></button>
     <button role="tab" data-view="exceptions" aria-selected="false" data-internal>Exceptions<span class="badge" id="excBadge"></span></button>
@@ -230,7 +230,7 @@
   <section class="view" id="v-materials">
     <div class="page">
       <h1>Sales materials</h1>
-      <p class="lead">POS flyers and broker materials. Each piece is linked to the products it features, so it also appears on those products' spec sheet pages.</p>
+      <p class="lead">POS flyers and broker materials. Each piece is linked to the products it features, so it also appears on those products' sales sheet pages.</p>
       <div class="matsearch"><input type="search" id="mq" placeholder="Search flyers and guides" aria-label="Search sales materials"><div class="filters" id="mtypes" style="margin:0"></div></div>
       <div class="mgrid" id="mgrid"></div>
     </div>
@@ -240,7 +240,7 @@
   <section class="view" id="v-images">
     <div class="page">
       <h1>Product images</h1>
-      <p class="lead">Each spec sheet uses one approved product image. The generator picks a front-facing view from 1WorldSync automatically; anything it can't pick confidently waits here. Choose the right view for each product, then export your picks.</p>
+      <p class="lead">Each sales sheet uses one approved product image. The generator picks a front-facing view from 1WorldSync automatically; anything it can't pick confidently waits here. Choose the right view for each product, then export your picks.</p>
       <div class="steps">
         <div class="step"><b>1 · Pick</b>Click the correct view for each product below, or paste a file path from the S: drive image library.</div>
         <div class="step"><b>2 · Export</b>Click <i>Export overrides.csv</i> and save it into the generator folder.</div>
@@ -439,7 +439,7 @@
     $("#right").innerHTML = `
       <button class="btn back" id="back">← Results</button>
       <div class="detail">
-        <div class="sheet"><img src="${p.preview}" alt="Spec sheet preview for ${esc(p.name)}"></div>
+        <div class="sheet"><img src="${p.preview}" alt="Sales sheet preview for ${esc(p.name)}"></div>
         <div class="facts">
           <div class="eyebrow" style="color:${p.color}">${esc(p.brand)}${p.market && p.market !== "US" ? ` <span class="mk">${esc(p.market)}</span>` : ""}</div>
           <h2>${esc(p.name)}</h2>
@@ -473,12 +473,12 @@
     getBlob(p.pdf).catch(() => {});   // prefetch so sharing is instant
     $("#aEmail").onclick = () => emailPdf({
       url: p.pdf, filename: p.pdf.split("/").pop(),
-      subject: `Spec sheet: ${p.brand} ${p.name} (${p.item})`,
-      text: `Hi,\n\nAttached is the current spec sheet for ${p.brand} ${p.name} (${p.pack}), item ${p.item}, revision ${fmtDate(p.rev)}.`
+      subject: `Sales sheet: ${p.brand} ${p.name} (${p.item})`,
+      text: `Hi,\n\nAttached is the current sales sheet for ${p.brand} ${p.name} (${p.pack}), item ${p.item}, revision ${fmtDate(p.rev)}.`
     });
     $("#aEmailLink").onclick = () => emailLink({ url: p.pdf,
-      subject: `Spec sheet: ${p.brand} ${p.name} (${p.item})`,
-      text: `Hi,\n\nHere is the current spec sheet for ${p.brand} ${p.name} (${p.pack}), item ${p.item}, revision ${fmtDate(p.rev)}:` });
+      subject: `Sales sheet: ${p.brand} ${p.name} (${p.item})`,
+      text: `Hi,\n\nHere is the current sales sheet for ${p.brand} ${p.name} (${p.pack}), item ${p.item}, revision ${fmtDate(p.rev)}:` });
     $("#aCopy").onclick = async () => { try { await navigator.clipboard.writeText(absUrl(p.pdf)); toast("Link copied"); } catch { prompt("Copy this link:", absUrl(p.pdf)); } };
     $("#aAdd").onclick = e => { state.sel.has(p.gtin) ? state.sel.delete(p.gtin) : state.sel.add(p.gtin);
       e.target.textContent = state.sel.has(p.gtin) ? "In package ✓" : "Add to package"; renderSel(); renderListChecks(); };
@@ -511,14 +511,14 @@
         const src = await PDFLib.PDFDocument.load(bytes);
         (await out.copyPages(src, src.getPageIndices())).forEach(pg => out.addPage(pg));
       }
-      out.setTitle(`NJFCO spec sheets (${items.length})`); out.setAuthor("Neil Jones Food Company");
+      out.setTitle(`NJFCO sales sheets (${items.length})`); out.setAuthor("Neil Jones Food Company");
       const blob = new Blob([await out.save()], {type: "application/pdf"});
-      const name = `NJFCO_Spec_Sheets_${new Date().toISOString().slice(0, 10)}_${items.length}.pdf`;
-      $("#pkgCount").textContent = `${items.length} spec sheets combined into one PDF.`;
+      const name = `NJFCO_Sales_Sheets_${new Date().toISOString().slice(0, 10)}_${items.length}.pdf`;
+      $("#pkgCount").textContent = `${items.length} sales sheets combined into one PDF.`;
       $("#pkgDl").onclick = () => { downloadBlob(blob, name); $("#pkgDlg").close(); toast("Package downloaded"); };
       $("#pkgMail").onclick = () => { $("#pkgDlg").close(); emailPdf({ blob, filename: name,
-        subject: `Neil Jones Food Company spec sheets (${items.length})`,
-        text: `Hi,\n\nAttached are the current spec sheets for:\n` + items.map(p => `- ${p.brand} ${p.name} (${p.pack}), item ${p.item}`).join("\n") }); };
+        subject: `Neil Jones Food Company sales sheets (${items.length})`,
+        text: `Hi,\n\nAttached are the current sales sheets for:\n` + items.map(p => `- ${p.brand} ${p.name} (${p.pack}), item ${p.item}`).join("\n") }); };
       $("#pkgDlg").showModal();
     } catch (e) {
       console.error(e); toast("Couldn't build the package here. Open the portal from its web address and try again.");
