@@ -47,7 +47,39 @@
   .chip { border: 1px solid var(--rule); background: #fff; border-radius: 16px; padding: 4px 11px; font-size: 12.5px;
           cursor: pointer; font-weight: 600; color: var(--soil); }
   .chip[aria-pressed="true"] { background: var(--soil); color: #fff; border-color: var(--soil); }
-  .chip .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 5px; vertical-align: 1px; }
+  .chip .dot, .dd .dot, .ftag .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 5px; vertical-align: 1px; flex: none; }
+  /* dropdown filters */
+  .filterbar { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+  .dd { position: relative; }
+  .dd-btn { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--rule); background: #fff; border-radius: 8px;
+            padding: 6px 10px; font-size: 12.5px; font-weight: 600; color: var(--soil); cursor: pointer; font-family: inherit; }
+  .dd-btn::after { content: ""; width: 6px; height: 6px; border-right: 1.6px solid currentColor; border-bottom: 1.6px solid currentColor;
+                   transform: rotate(45deg) translate(-2px, -2px); margin-left: 2px; opacity: .7; }
+  .dd-btn:hover, .dd-btn[aria-expanded="true"] { border-color: var(--bronze); background: var(--warm); }
+  .dd-btn.has { border-color: var(--soil); }
+  .dd-btn .n { background: var(--soil); color: #fff; border-radius: 9px; padding: 0 6px; font-size: 11px; line-height: 17px; }
+  .dd-panel { position: absolute; top: calc(100% + 4px); left: 0; z-index: 40; background: #fff; border: 1px solid var(--rule);
+              border-radius: 8px; box-shadow: 0 8px 24px rgba(40, 25, 15, .16); min-width: 230px; max-width: min(320px, calc(100vw - 24px)); padding: 6px; }
+  .dd-panel.align-r { left: auto; right: 0; }
+  .dd-panel[hidden] { display: none; }
+  .dd-find { width: 100%; padding: 6px 9px; border: 1px solid var(--rule); border-radius: 6px; font-size: 13px; margin-bottom: 4px; outline: none; font-family: inherit; }
+  .dd-find:focus { border-color: var(--bronze); }
+  .dd-list { max-height: 280px; overflow-y: auto; }
+  .dd-list label { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px; font-size: 13px; color: var(--soil); cursor: pointer; }
+  .dd-list label:hover { background: var(--warm); }
+  .dd-list input { width: 15px; height: 15px; accent-color: var(--soil); margin: 0; flex: none; }
+  .dd-list .cnt { margin-left: auto; color: var(--bronze); font-size: 11.5px; padding-left: 10px; }
+  .dd-list .none { padding: 8px; font-size: 12.5px; color: var(--bronze); }
+  .dd-foot { display: flex; justify-content: space-between; border-top: 1px solid var(--rule); margin-top: 4px; padding: 6px 4px 0; }
+  .dd-foot button { border: 0; background: none; cursor: pointer; font-size: 12.5px; font-weight: 600; color: var(--slate); padding: 2px 4px; font-family: inherit; }
+  .dd-foot button.done { color: var(--soil); }
+  .tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .tags:empty { display: none; }
+  .ftag { display: inline-flex; align-items: center; background: var(--cream); border: 1px solid var(--rule); border-radius: 14px;
+         padding: 2px 3px 2px 10px; font-size: 12px; font-weight: 600; color: var(--soil); }
+  .ftag small { font-weight: 500; color: var(--bronze); margin-right: 4px; }
+  .ftag button { border: 0; background: none; cursor: pointer; color: var(--soil); font-size: 14px; line-height: 1; padding: 2px 6px; border-radius: 10px; }
+  .ftag button:hover { background: rgba(0,0,0,.08); }
   .count { font-size: 12px; color: var(--bronze); padding: 8px 16px; border-bottom: 1px solid var(--rule); display: flex; justify-content: space-between; }
   .count button { border: 0; background: none; color: var(--slate); cursor: pointer; font-weight: 600; font-size: 12px; padding: 0; }
   ul.results { list-style: none; margin: 0; padding: 0; overflow-y: auto; flex: 1; }
@@ -208,10 +240,8 @@
     <div class="left">
       <div class="searchbox">
         <input type="search" id="q" placeholder="Search item #, base #, GTIN or product name" autocomplete="off" aria-label="Search products">
-        <div class="filters" id="chanFilters"></div>
-        <div class="filters" id="brandFilters"></div>
-        <div class="filters" id="catFilters"></div>
-        <div class="filters" id="mktFilters"></div>
+        <div class="filterbar" id="filterbar" aria-label="Filters"></div>
+        <div class="tags" id="filterTags" aria-label="Active filters"></div>
         <div class="scope" id="scope"><span id="scopeLabel"></span><button id="scopeClear">Show all products ×</button></div>
       </div>
       <div class="count"><span id="count"></span><button id="clearFilters" hidden>Clear filters</button></div>
@@ -362,21 +392,93 @@
     p._text = [p.name, p.short, p.brand, p.pack, p.category, p.channel || "", p.organic ? "organic" : "", p.market || "", p.chips.join(" ")].join(" ").toLowerCase();
   });
 
-  function chipRow(el, items, set, withDot) {
-    el.innerHTML = items.map(([k, c]) =>
-      `<button class="chip" aria-pressed="${set.has(k)}" data-k="${esc(k)}">${withDot ? `<span class="dot" style="background:${c}"></span>` : ""}${esc(k)}</button>`).join("");
-    el.querySelectorAll(".chip").forEach(b => b.onclick = () => {
-      set.has(b.dataset.k) ? set.delete(b.dataset.k) : set.add(b.dataset.k);
-      b.setAttribute("aria-pressed", set.has(b.dataset.k)); renderList();
+  const mktKey = p => (p.market || "US") === "US" ? "US labels" : `${p.market} labels`;
+  const brandColor = Object.fromEntries(brands);
+  // Each dropdown: which state set it fills and how to read that value from a product.
+  const FILTERS = [
+    { key: "chans",  label: "Channel",  set: state.chans,  val: p => p.channel || "Foodservice" },
+    { key: "brands", label: "Brand",    set: state.brands, val: p => p.brand, dot: true },
+    { key: "cats",   label: "Category", set: state.cats,   val: p => p.category },
+    { key: "mkts",   label: "Label",    set: state.mkts,   val: mktKey,
+      order: (a, b) => (a === "US labels" ? -1 : b === "US labels" ? 1 : a.localeCompare(b)) },
+  ].filter(f => new Set(P.map(f.val)).size > 1);   // hide a dropdown with only one choice
+
+  // Product passes every dropdown except `skip` (so each list narrows to fit the others).
+  function passes(p, skip) {
+    if (state.only && !state.only.gtins.includes(p.gtin)) return false;
+    return FILTERS.every(f => f === skip || !f.set.size || f.set.has(f.val(p)));
+  }
+  function options(f) {
+    const n = new Map();
+    P.forEach(p => { if (passes(p, f)) { const v = f.val(p); n.set(v, (n.get(v) || 0) + 1); } });
+    f.set.forEach(v => { if (!n.has(v)) n.set(v, 0); });   // keep ticked items visible
+    return [...n.entries()].sort((a, b) => (f.order ? f.order(a[0], b[0]) : a[0].localeCompare(b[0])));
+  }
+  // Drop ticks that no longer match anything (e.g. a foodservice category after choosing Industrial).
+  function prune(changed) {
+    FILTERS.forEach(f => { if (f === changed) return;
+      const live = new Set(P.filter(p => passes(p, f)).map(f.val));
+      [...f.set].forEach(v => { if (!live.has(v)) f.set.delete(v); }); });
+  }
+
+  let openDD = null;
+  function closeDD(focusBtn) {
+    if (!openDD) return;
+    const d = openDD; openDD = null;
+    d.querySelector(".dd-panel").hidden = true;
+    d.querySelector(".dd-btn").setAttribute("aria-expanded", "false");
+    if (focusBtn) d.querySelector(".dd-btn").focus();
+  }
+  function buildFilterBar() {
+    $("#filterbar").innerHTML = FILTERS.map(f => `
+      <div class="dd" data-f="${f.key}">
+        <button class="dd-btn" type="button" aria-haspopup="true" aria-expanded="false">${f.label}<span class="n" hidden></span></button>
+        <div class="dd-panel" role="group" aria-label="${f.label}" hidden></div>
+      </div>`).join("");
+    $("#filterbar").querySelectorAll(".dd").forEach(d => {
+      const f = FILTERS.find(x => x.key === d.dataset.f);
+      d.querySelector(".dd-btn").onclick = e => { e.stopPropagation(); openDD === d ? closeDD() : openPanel(d, f); };
+      d.querySelector(".dd-panel").onclick = e => e.stopPropagation();
     });
   }
-  const chans = [...new Set(P.map(p => p.channel || "Foodservice"))].sort();
-  if (chans.length > 1) chipRow($("#chanFilters"), chans.map(c => [c]), state.chans, false);
-  chipRow($("#brandFilters"), brands, state.brands, true);
-  chipRow($("#catFilters"), cats.map(c => [c]), state.cats, false);
-  const mkts = [...new Set(P.map(p => p.market || "US"))].sort((a, b) => (a === "US" ? -1 : b === "US" ? 1 : a.localeCompare(b)));
-  if (mkts.length > 1) chipRow($("#mktFilters"), mkts.map(m => [m === "US" ? "US labels" : `${m} labels`]), state.mkts, false);
-  const mktKey = p => (p.market || "US") === "US" ? "US labels" : `${p.market} labels`;
+  function openPanel(d, f) {
+    closeDD();
+    const panel = d.querySelector(".dd-panel"), opts = options(f);
+    panel.innerHTML = (opts.length > 8 ? `<input class="dd-find" type="search" placeholder="Find ${f.label.toLowerCase()}…" aria-label="Find ${f.label}">` : "") +
+      `<div class="dd-list">${opts.map(([v, n]) => `
+        <label data-v="${esc(v.toLowerCase())}"><input type="checkbox" value="${esc(v)}" ${f.set.has(v) ? "checked" : ""}>
+          ${f.dot ? `<span class="dot" style="background:${brandColor[v]}"></span>` : ""}<span>${esc(v)}</span><span class="cnt">${n}</span></label>`).join("")
+        || `<div class="none">Nothing matches the other filters.</div>`}</div>
+      <div class="dd-foot"><button type="button" class="clr">Clear</button><button type="button" class="done">Done</button></div>`;
+    panel.querySelectorAll(".dd-list input").forEach(cb => cb.onchange = () => {
+      cb.checked ? f.set.add(cb.value) : f.set.delete(cb.value); prune(f); renderList();
+    });
+    panel.querySelector(".clr").onclick = () => { f.set.clear(); panel.querySelectorAll(".dd-list input").forEach(cb => cb.checked = false); renderList(); };
+    panel.querySelector(".done").onclick = () => closeDD(true);
+    const find = panel.querySelector(".dd-find");
+    if (find) find.oninput = () => { const t = find.value.trim().toLowerCase();
+      panel.querySelectorAll(".dd-list label").forEach(l => l.hidden = t && !l.dataset.v.includes(t)); };
+    panel.classList.remove("align-r"); panel.hidden = false;
+    d.querySelector(".dd-btn").setAttribute("aria-expanded", "true"); openDD = d;
+    const box = d.closest(".left") || document.body;   // keep the panel inside the search column
+    if (panel.getBoundingClientRect().right > Math.min(box.getBoundingClientRect().right, innerWidth) - 4) panel.classList.add("align-r");
+    (find || panel.querySelector(".dd-list input") || panel.querySelector(".done")).focus();
+  }
+  function renderFilterUI() {
+    $("#filterbar").querySelectorAll(".dd").forEach(d => {
+      const f = FILTERS.find(x => x.key === d.dataset.f), n = d.querySelector(".n");
+      n.hidden = !f.set.size; n.textContent = f.set.size;
+      d.querySelector(".dd-btn").classList.toggle("has", !!f.set.size);
+    });
+    $("#filterTags").innerHTML = FILTERS.flatMap(f => [...f.set].map(v => `
+      <span class="ftag"><small>${f.label}:</small>${f.dot ? `<span class="dot" style="background:${brandColor[v]}"></span>` : ""}${esc(v)}<button type="button" data-f="${f.key}" data-v="${esc(v)}" aria-label="Remove ${esc(v)}">×</button></span>`)).join("");
+    $("#filterTags").querySelectorAll("button").forEach(b => b.onclick = () => {
+      FILTERS.find(x => x.key === b.dataset.f).set.delete(b.dataset.v); closeDD(); renderList(); });
+  }
+  function clearAllFilters() { FILTERS.forEach(f => f.set.clear()); closeDD(); }
+  document.addEventListener("click", () => closeDD());
+  document.addEventListener("keydown", e => { if (e.key === "Escape" && openDD) closeDD(true); });
+  buildFilterBar();
 
   function score(p, q) {
     if (!q) return 1;
@@ -393,7 +495,7 @@
 
   function filtered() {
     return P.map(p => [p, score(p, state.q.trim())])
-      .filter(([p, s]) => s > 0 && (!state.only || state.only.gtins.includes(p.gtin)) && (!state.brands.size || state.brands.has(p.brand)) && (!state.cats.size || state.cats.has(p.category)) && (!state.chans.size || state.chans.has(p.channel || "Foodservice")) && (!state.mkts.size || state.mkts.has(mktKey(p))))
+      .filter(([p, s]) => s > 0 && passes(p, null))
       .sort((a, b) => b[1] - a[1] || a[0].brand.localeCompare(b[0].brand) || a[0].name.localeCompare(b[0].name))
       .map(([p]) => p);
   }
@@ -401,6 +503,7 @@
   function renderList() {
     const list = filtered();
     $("#count").textContent = `${list.length} of ${P.length} products`;
+    renderFilterUI();
     $("#clearFilters").hidden = !(state.brands.size || state.cats.size || state.mkts.size || state.chans.size || state.q || state.only);
     $("#scope").classList.toggle("on", !!state.only);
     if (state.only) $("#scopeLabel").textContent = `Products in: ${state.only.title}`;
@@ -425,8 +528,7 @@
   $("#q").addEventListener("input", e => { clearTimeout(qTimer); qTimer = setTimeout(() => { state.q = e.target.value; renderList(); }, 120); });
   $("#q").addEventListener("keydown", e => { if (e.key === "Enter") { const f = filtered()[0]; if (f) openDetail(f.gtin); } });
   $("#scopeClear").onclick = () => { state.only = null; renderList(); };
-  $("#clearFilters").onclick = () => { state.only = null; state.brands.clear(); state.cats.clear(); state.mkts.clear(); state.chans.clear(); state.q = ""; $("#q").value = "";
-    document.querySelectorAll(".filters .chip").forEach(c => c.setAttribute("aria-pressed", false)); renderList(); };
+  $("#clearFilters").onclick = () => { state.only = null; clearAllFilters(); state.q = ""; $("#q").value = ""; renderList(); };
 
   // ---------------- detail ----------------
   function openDetail(gtin, quiet) {
@@ -569,8 +671,7 @@
     $("#mgrid").querySelectorAll("[data-prod]").forEach(b => b.onclick = () => {
       const m = M.find(x => x.id === b.dataset.prod);
       state.only = { title: m.title, gtins: m.gtins }; state.active = null;
-      state.q = ""; $("#q").value = ""; state.brands.clear(); state.cats.clear(); state.chans.clear(); state.mkts.clear();
-      document.querySelectorAll(".filters .chip").forEach(c => c.setAttribute("aria-pressed", false));
+      state.q = ""; $("#q").value = ""; clearAllFilters();
       showView("sheets"); renderList();
     });
   }
