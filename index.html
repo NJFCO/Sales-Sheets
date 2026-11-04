@@ -390,7 +390,7 @@
     const mail = `mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent("Product Sales Sheets question")}`;
     $("#pilotNote").innerHTML = BROKER
       ? `<b>${META.count} Neil Jones Food Company products</b>${split} · Updated ${when}<span class="wide"> · Questions? <a href="${mail}">${CONTACT_EMAIL}</a></span>`
-      : `<b>${META.count} Neil Jones Food Company products</b>${split} · Built ${esc(META.built)} from 1WorldSync · <i>Internal view: draft data, not for customer distribution until approved</i>`;
+      : `<b>${META.count} Neil Jones Food Company products</b>${split} · Built ${esc(META.built)} from ${META.source ? `<b>${esc(META.source)}</b>` : "1WorldSync"} · <i>Internal view: draft data, not for customer distribution until approved</i>`;
   })();
   // Help button: opens an email to Marketing, noting the product on screen if one is open.
   $("#helpBtn").onclick = e => {
