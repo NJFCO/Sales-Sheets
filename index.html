@@ -95,6 +95,8 @@
   .r-name { font-weight: 700; color: var(--soil); line-height: 1.3; }
   .r-sub { font-size: 12.5px; color: var(--bronze); margin-top: 2px; }
   .r-sub b { color: var(--ink); font-weight: 600; }
+  .r-hit { display: inline-block; margin-top: 4px; font-size: 11.5px; font-weight: 600; color: var(--soil); background: var(--cream); border-radius: 4px; padding: 1px 7px; }
+  dl.kv dd.dist span { display: block; font-weight: 500; } dl.kv dd.dist b { font-weight: 700; }
   .mk { display: inline-block; background: var(--soil); color: #fff; font-size: 10px; font-weight: 700; letter-spacing: .08em;
         text-transform: uppercase; padding: 1px 6px; border-radius: 3px; vertical-align: 1px; }
   .r-item { font-size: 12px; text-align: right; color: var(--bronze); white-space: nowrap; }
@@ -122,6 +124,21 @@
   dl.kv { margin: 0; display: grid; grid-template-columns: 96px 1fr; gap: 0; font-size: 13px; }
   dl.kv dt { color: var(--bronze); padding: 7px 0; border-top: 1px solid var(--rule); }
   dl.kv dd { margin: 0; padding: 7px 0; border-top: 1px solid var(--rule); font-weight: 600; }
+  .photos { margin-top: 16px; }
+  .sibs { margin-top: 16px; }
+  .sibs h3 { font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--bronze); margin: 0 0 6px; }
+  .sibs a { display: block; padding: 7px 9px; border: 1px solid var(--rule); border-radius: 7px; margin-bottom: 5px; text-decoration: none; font-size: 12.5px; background: #fff; }
+  .sibs a:hover { border-color: var(--bronze); background: var(--warm); }
+  .sibs a span:last-child { display: block; color: var(--bronze); font-size: 12px; margin-top: 1px; }
+  .photos h3 { font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--bronze); margin: 0 0 8px; }
+  .ph-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 8px; }
+  .ph-grid figure { margin: 0; border: 1px solid var(--rule); border-radius: 8px; background: #fff; overflow: hidden; }
+  .ph-grid img { display: block; width: 100%; height: 110px; object-fit: contain; padding: 6px; background: #fff; }
+  .ph-grid figcaption { display: flex; align-items: center; gap: 4px; border-top: 1px solid var(--rule); padding: 4px 6px; font-size: 11.5px; color: var(--bronze); }
+  .ph-grid figcaption { flex-wrap: wrap; justify-content: space-between; }
+  .ph-grid figcaption span { flex: 1 0 100%; padding: 1px 5px 0; font-weight: 600; color: var(--soil); }
+  .ph-grid button, .ph-grid a { border: 0; background: none; padding: 3px 5px; border-radius: 5px; font: 600 11.5px inherit; font-family: inherit; color: var(--soil); cursor: pointer; text-decoration: none; }
+  .ph-grid button:hover, .ph-grid a:hover { background: var(--warm); }
   .rev { margin-top: 14px; padding: 10px 12px; background: var(--cream); border-radius: 8px; font-size: 12.5px; }
   .rev b { color: var(--soil); }
   .tagrow { display: flex; flex-wrap: wrap; gap: 5px; margin: 10px 0 0; }
@@ -246,7 +263,7 @@
   <section class="view on" id="v-sheets">
     <div class="left">
       <div class="searchbox">
-        <input type="search" id="q" placeholder="Search item #, base #, GTIN or product name" autocomplete="off" aria-label="Search products">
+        <input type="search" id="q" placeholder="Search item #, GTIN, UPC, distributor # or name" autocomplete="off" aria-label="Search products">
         <div class="filterbar" id="filterbar" aria-label="Filters"></div>
         <div class="tags" id="filterTags" aria-label="Active filters"></div>
         <div class="scope" id="scope"><span id="scopeLabel"></span><button id="scopeClear">Show all products ×</button></div>
@@ -384,7 +401,7 @@
   (() => {
     const d = new Date(META.built.slice(0, 10) + "T12:00:00");
     const when = isNaN(d) ? META.built.slice(0, 10) : d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-    const byChan = {}; P.forEach(p => { const c = p.channel || "Foodservice"; byChan[c] = (byChan[c] || 0) + 1; });
+    const byChan = {}; P.forEach(p => { const c = p.owner && p.owner !== "NJFCO" ? "Distributor label" : (p.channel || "Foodservice"); byChan[c] = (byChan[c] || 0) + 1; });
     const split = Object.keys(byChan).length > 1
       ? ` <span class="wide">(${Object.entries(byChan).sort((a, b) => b[1] - a[1]).map(([c, n]) => `${n} ${esc(c)}`).join(" · ")})</span>` : "";
     const mail = `mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent("Product Sales Sheets question")}`;
@@ -410,11 +427,12 @@
   document.querySelectorAll("nav.tabs button").forEach(b => b.onclick = () => showView(b.dataset.view));
 
   // ---------------- search ----------------
-  const state = { q: "", chans: new Set(), brands: new Set(), cats: new Set(), mkts: new Set(), active: null, sel: new Set(), only: null };
+  const state = { q: "", chans: new Set(), owners: new Set(), brands: new Set(), cats: new Set(), mkts: new Set(), active: null, sel: new Set(), only: null };
   const brands = [...new Map(P.map(p => [p.brand, p.color])).entries()];
   const cats = [...new Set(P.map(p => p.category))].sort();
   P.forEach(p => {
-    p._digits = [p.gtin, p.item.replace("-", ""), p.base].join(" ");
+    p._digits = [p.gtin, p.item.replace("-", ""), p.base, (p.upc || "").replace("-", "")].join(" ");
+    p._dist = (p.dist || []).map(x => ({ ...x, k: x.n.replace(/[^0-9a-z]/gi, "").toUpperCase() }));
     p._text = [p.name, p.short, p.brand, p.pack, p.category, p.channel || "", p.organic ? "organic" : "", p.market || "", p.chips.join(" ")].join(" ").toLowerCase();
   });
 
@@ -423,6 +441,8 @@
   // Each dropdown: which state set it fills and how to read that value from a product.
   const FILTERS = [
     { key: "chans",  label: "Channel",  set: state.chans,  val: p => p.channel || "Foodservice" },
+    { key: "owners", label: "Label owner", set: state.owners, val: p => p.owner && p.owner !== "NJFCO" ? p.owner : "NJFCO brands",
+      order: (a, b) => (a === "NJFCO brands" ? -1 : b === "NJFCO brands" ? 1 : a.localeCompare(b)) },
     { key: "brands", label: "Brand",    set: state.brands, val: p => p.brand, dot: true },
     { key: "cats",   label: "Category", set: state.cats,   val: p => p.category },
     { key: "mkts",   label: "Label",    set: state.mkts,   val: mktKey,
@@ -507,10 +527,14 @@
   buildFilterBar();
 
   function score(p, q) {
+    p._hit = "";
     if (!q) return 1;
+    const qk = q.replace(/[^0-9a-z]/gi, "").toUpperCase();
+    const dh = qk.length >= 4 && p._dist.find(x => x.k === qk);
+    if (dh) { p._hit = `${dh.d} # ${dh.n}`; return 100; }
     const digits = q.replace(/[^0-9]/g, "");
     if (digits.length >= 5 && digits.length === q.replace(/[\s-]/g, "").length) {
-      if (p.gtin === digits || p.gtin.endsWith(digits) || p.item.replace("-", "") === digits) return 100;
+      if (p.gtin === digits || p.gtin.endsWith(digits) || p.item.replace("-", "") === digits || (p.upc && p.upc.replace("-", "") === digits)) return 100;
       if (p.base === digits.slice(0, 5) && digits.length <= 10) return 80;
       return p._digits.includes(digits) ? 50 : 0;
     }
@@ -541,7 +565,7 @@
       <li data-g="${p.gtin}" class="${state.active === p.gtin ? "active" : ""}">
         <input type="checkbox" aria-label="Add ${esc(p.name)} to package" ${state.sel.has(p.gtin) ? "checked" : ""}>
         <div><div class="r-name">${esc(p.name)}</div>
-          <div class="r-sub"><b style="color:${p.color}">${esc(p.brand)}</b>${p.market && p.market !== "US" ? ` <span class="mk">${esc(p.market)}</span>` : ""} · ${esc(p.pack)}</div></div>
+          <div class="r-sub"><b style="color:${p.color}">${esc(p.brand)}</b>${p.market && p.market !== "US" ? ` <span class="mk">${esc(p.market)}</span>` : ""} · ${esc(p.pack)}</div>${p._hit ? `<div class="r-hit">Matched ${esc(p._hit)}</div>` : ""}</div>
         <div class="r-item"><b>${p.item}</b>Rev ${fmtDate(p.rev)}</div>
       </li>`).join("") : `<div class="empty-list">No products match. Try an item number, base number or a product word like "marinara".</div>`;
     $("#results").querySelectorAll("li").forEach(li => {
@@ -583,12 +607,21 @@
           <dl class="kv">
             <dt>Item #</dt><dd>${p.item}</dd>
             <dt>Case GTIN</dt><dd>${p.gtin}</dd>
+            ${p.upc ? `<dt>UPC</dt><dd>${p.upc}</dd>` : ""}
+            ${(p.dist || []).length ? `<dt>Distributor #</dt><dd class="dist">${p.dist.map(x => `<span>${esc(x.d)} <b>${esc(x.n)}</b></span>`).join("")}</dd>` : ""}
             <dt>Category</dt><dd>${esc(p.category)}</dd>
             <dt>Case</dt><dd>${esc(p.case)}</dd>
             <dt>Shelf life</dt><dd>${esc(p.shelf)}</dd>
             <dt>Allergens</dt><dd>${esc(p.allergens.replace("Allergens: ", ""))}</dd>
           </dl>
           <div class="tagrow">${p.chips.map(c => `<span class="tag">${esc(c)}</span>`).join("")}</div>
+          ${sameBase(p).length ? `<div class="sibs"><h3>Same base # ${esc(p.base)} · other labels and packs</h3>${sameBase(p).map(x => `
+            <a href="#gtin=${x.gtin}" data-g="${x.gtin}"><b style="color:${x.color}">${esc(x.brand)}</b>${x.market !== "US" ? ` <span class="mk">${esc(x.market)}</span>` : ""}<span>${esc(x.pack)} · ${x.item}</span></a>`).join("")}</div>` : ""}
+          ${(p.photos || []).length ? `<div class="photos"><h3>Product images</h3><div class="ph-grid">${p.photos.map((ph, i) => `
+            <figure><img src="${ph.src}" alt="${esc(p.name)}: ${esc(ph.view)}" loading="lazy">
+              <figcaption><span>${esc(ph.view)}</span>
+                <button type="button" class="ph-copy" data-i="${i}" title="Copy image to paste into an email or document">Copy</button>
+                <a href="${ph.src}" download="${esc(ph.dl)}" title="Download full-size image">Download</a></figcaption></figure>`).join("")}</div></div>` : ""}
           <div class="rev">Revision <b>${fmtDate(p.rev)}</b> · Doc ${p.doc}<br>Source: 1WorldSync GDSN</div>
           ${matsFor(p.gtin).length ? `<div class="related"><h3>Related sales materials</h3>${matsFor(p.gtin).map(m => `
             <a class="rel" href="${m.pdf}" target="_blank" rel="noopener">${m.thumb ? `<img src="${m.thumb}" alt="">` : `<span></span>`}
@@ -610,8 +643,32 @@
     $("#aCopy").onclick = async () => { try { await navigator.clipboard.writeText(absUrl(p.pdf)); toast("Link copied"); } catch { prompt("Copy this link:", absUrl(p.pdf)); } };
     $("#aAdd").onclick = e => { state.sel.has(p.gtin) ? state.sel.delete(p.gtin) : state.sel.add(p.gtin);
       e.target.textContent = state.sel.has(p.gtin) ? "In package ✓" : "Add to package"; renderSel(); renderListChecks(); };
+    document.querySelectorAll("#right .sibs a").forEach(a => a.onclick = e => { e.preventDefault(); openDetail(a.dataset.g); });
+    document.querySelectorAll("#right .ph-copy").forEach(b => b.onclick = () => copyImage(p.photos[+b.dataset.i].src));
     const ti = $("#toImg"); if (ti) ti.onclick = e => { e.preventDefault(); showView("images"); const r = document.querySelector(`[data-img="${gtin}"]`); r && r.scrollIntoView({block: "center"}); };
     $("#right").scrollTop = 0;
+  }
+
+  // Other products sharing the 5-digit base number (same product under other labels or pack sizes); NJFCO brands first.
+  function sameBase(p) {
+    return P.filter(x => x.base && x.base === p.base && x.gtin !== p.gtin)
+      .sort((a, b) => ((a.owner || "NJFCO") !== "NJFCO") - ((b.owner || "NJFCO") !== "NJFCO") || a.brand.localeCompare(b.brand) || a.item.localeCompare(b.item));
+  }
+
+  // Copy a product image to the clipboard (as PNG, which every browser accepts) for pasting into email or Word.
+  async function copyImage(src) {
+    const png = (async () => {
+      const blob = await getBlob(src);
+      const bmp = await createImageBitmap(blob);
+      const c = document.createElement("canvas"); c.width = bmp.width; c.height = bmp.height;
+      c.getContext("2d").drawImage(bmp, 0, 0);
+      return await new Promise(r => c.toBlob(r, "image/png"));
+    })();
+    try {
+      if (!navigator.clipboard || !window.ClipboardItem) throw 0;
+      await navigator.clipboard.write([new ClipboardItem({ "image/png": png })]);
+      toast("Image copied - paste it into your email or document");
+    } catch { toast("This browser can't copy images - use Download instead"); }
   }
 
   function printPdf(p) {
