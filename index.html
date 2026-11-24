@@ -22,10 +22,10 @@
   a { color: inherit; }
 
   header.top { background: var(--soil); color: #fff; display: flex; align-items: center; gap: 24px;
-               padding: 10px 24px; flex: none; }
-  header.top img { height: 40px; display: block; }
-  header.top .title { font-weight: 700; font-size: 15px; letter-spacing: .02em; }
-  header.top .title small { display: block; font-weight: 400; font-size: 11.5px; opacity: .8; letter-spacing: .04em; }
+               padding: 14px 28px; flex: none; }
+  header.top img { height: 48px; display: block; }
+  header.top .title { font-weight: 700; font-size: 18px; letter-spacing: .02em; }
+  header.top .title small { display: block; font-weight: 400; font-size: 12.5px; opacity: .8; letter-spacing: .04em; margin-top: 1px; }
   nav.tabs { margin-left: auto; display: flex; gap: 4px; }
   .helpbtn { display: inline-flex; align-items: center; gap: 7px; color: #fff; text-decoration: none; font-weight: 600; font-size: 13.5px;
              border: 1px solid rgba(255,255,255,.45); border-radius: 18px; padding: 6px 14px 6px 7px; white-space: nowrap; }
@@ -108,9 +108,23 @@
   .selbar .grow { flex: 1; font-weight: 600; }
 
   .right { overflow-y: auto; padding: 24px 28px; min-height: 0; }
-  .detail { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 28px; max-width: 1180px; }
+  .detail { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 28px; max-width: 1800px; }
   .sheet { background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.08), 0 8px 28px rgba(79,62,53,.12); border-radius: 4px; overflow: hidden; }
   .sheet img { width: 100%; display: block; }
+  .sheet { position: relative; cursor: zoom-in; }
+  .sheet .zoomhint { position: absolute; right: 12px; bottom: 12px; background: rgba(40,28,22,.82); color: #fff; font-size: 12px; font-weight: 600;
+                     padding: 6px 11px; border-radius: 16px; opacity: 0; transition: opacity .15s; pointer-events: none; }
+  .sheet:hover .zoomhint, .sheet:focus-visible .zoomhint { opacity: 1; }
+  #viewer { position: fixed; inset: 0; z-index: 90; background: rgba(30,22,18,.88); display: flex; flex-direction: column; }
+  #viewer[hidden] { display: none; }
+  #viewer .vbar { display: flex; align-items: center; gap: 10px; padding: 10px 16px; color: #fff; font-size: 14px; font-weight: 600; }
+  #viewer .vbar span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #viewer .vbar a, #viewer .vbar button { color: #fff; background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.35); border-radius: 8px;
+                     padding: 7px 13px; font: 600 13px inherit; font-family: inherit; cursor: pointer; text-decoration: none; }
+  #viewer .vbar a:hover, #viewer .vbar button:hover { background: rgba(255,255,255,.22); }
+  #viewer .vscroll { flex: 1; overflow: auto; padding: 0 16px 24px; text-align: center; }
+  #viewer .vscroll img { width: min(1200px, 100%); background: #fff; border-radius: 3px; box-shadow: 0 10px 40px rgba(0,0,0,.4); cursor: zoom-in; }
+  #viewer.big .vscroll img { width: 1530px; max-width: none; cursor: zoom-out; }
   .facts h2 { margin: 0 0 2px; font-size: 22px; color: var(--soil); line-height: 1.2; }
   .facts .eyebrow { font-weight: 800; font-size: 12px; letter-spacing: .16em; text-transform: uppercase; }
   .facts .pack { font-style: italic; font-weight: 600; color: var(--bronze); margin-bottom: 14px; }
@@ -591,7 +605,7 @@
     $("#right").innerHTML = `
       <button class="btn back" id="back">← Results</button>
       <div class="detail">
-        <div class="sheet"><img src="${p.preview}" alt="Sales sheet preview for ${esc(p.name)}"></div>
+        <div class="sheet" id="sheetPrev" tabindex="0" role="button" aria-label="Open full-size sales sheet"><img src="${p.preview}" alt="Sales sheet preview for ${esc(p.name)}"><span class="zoomhint">Click to enlarge</span></div>
         <div class="facts">
           <div class="eyebrow" style="color:${p.color}">${esc(p.brand)}${p.market && p.market !== "US" ? ` <span class="mk">${esc(p.market)}</span>` : ""}</div>
           <h2>${esc(p.name)}</h2>
@@ -632,6 +646,8 @@
     $("#back").onclick = () => $("#v-sheets").classList.remove("detail-open");
     $("#aPrint").onclick = () => printPdf(p);
     getBlob(p.pdf).catch(() => {});   // prefetch so sharing is instant
+    const sp = $("#sheetPrev");
+    if (sp) { sp.onclick = () => openViewer(p); sp.onkeydown = e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openViewer(p); } }; }
     $("#aEmail").onclick = () => emailPdf({
       url: p.pdf, filename: p.pdf.split("/").pop(),
       subject: `Sales sheet: ${p.brand} ${p.name} (${p.item})`,
@@ -654,6 +670,35 @@
     return P.filter(x => x.base && x.base === p.base && x.gtin !== p.gtin)
       .sort((a, b) => ((a.owner || "NJFCO") !== "NJFCO") - ((b.owner || "NJFCO") !== "NJFCO") || a.brand.localeCompare(b.brand) || a.item.localeCompare(b.item));
   }
+
+  // Full-size sales sheet: the high-resolution preview, fit to the window; click it for 100% size.
+  // Uses the image rather than the PDF because some PCs are set to download PDFs instead of showing them.
+  // Phones open the PDF in a new tab instead.
+  function openViewer(p) {
+    if (innerWidth < 820) { window.open(p.pdf, "_blank"); return; }
+    let v = $("#viewer");
+    if (!v) {
+      v = document.createElement("div"); v.id = "viewer"; v.hidden = true;
+      v.setAttribute("role", "dialog"); v.setAttribute("aria-modal", "true");
+      v.innerHTML = `<div class="vbar"><span></span><a target="_blank" rel="noopener">Open PDF</a><button type="button">Close ✕</button></div><div class="vscroll"><img alt="Sales sheet"></div>`;
+      document.body.appendChild(v);
+      v.querySelector("button").onclick = closeViewer;
+      v.onclick = e => { if (e.target === v || e.target.classList.contains("vscroll")) closeViewer(); };
+      v.querySelector(".vscroll img").onclick = () => v.classList.toggle("big");
+    }
+    v.querySelector("span").textContent = `${p.brand} · ${p.name} · ${p.item}`;
+    v.querySelector("a").href = p.pdf;
+    v.querySelector(".vscroll img").src = p.preview;
+    v.querySelector(".vscroll img").alt = `Sales sheet for ${p.name}`;
+    v.classList.remove("big"); v.querySelector(".vscroll").scrollTop = 0;
+    v.hidden = false; v.querySelector("button").focus();
+  }
+  function closeViewer() {
+    const v = $("#viewer"); if (!v || v.hidden) return;
+    v.hidden = true;
+    const sp = $("#sheetPrev"); if (sp) sp.focus();
+  }
+  document.addEventListener("keydown", e => { if (e.key === "Escape") closeViewer(); });
 
   // Copy a product image to the clipboard (as PNG, which every browser accepts) for pasting into email or Word.
   async function copyImage(src) {
