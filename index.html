@@ -617,8 +617,8 @@
           <div class="tagrow">${p.chips.map(c => `<span class="tag">${esc(c)}</span>`).join("")}</div>
           ${sameBase(p).length ? `<div class="sibs"><h3>Same base # ${esc(p.base)} · other labels and packs</h3>${sameBase(p).map(x => `
             <a href="#gtin=${x.gtin}" data-g="${x.gtin}"><b style="color:${x.color}">${esc(x.brand)}</b>${x.market !== "US" ? ` <span class="mk">${esc(x.market)}</span>` : ""}<span>${esc(x.pack)} · ${x.item}</span></a>`).join("")}</div>` : ""}
-          ${(p.photos || []).length ? `<div class="photos"><h3>Product images</h3><div class="ph-grid">${p.photos.map((ph, i) => `
-            <figure><img src="${ph.src}" alt="${esc(p.name)}: ${esc(ph.view)}" loading="lazy">
+          ${(p.photos || []).length ? `<div class="photos"><h3>Product images (${p.photos.length})</h3><div class="ph-grid">${p.photos.map((ph, i) => `
+            <figure title="${esc(ph.file || ph.view)}"><img src="${ph.src}" alt="${esc(p.name)}: ${esc(ph.view)}" loading="lazy">
               <figcaption><span>${esc(ph.view)}</span>
                 <button type="button" class="ph-copy" data-i="${i}" title="Copy image to paste into an email or document">Copy</button>
                 <a href="${ph.src}" download="${esc(ph.dl)}" title="Download full-size image">Download</a></figcaption></figure>`).join("")}</div></div>` : ""}
